@@ -1,0 +1,593 @@
+#+STARTUP: overview
+
+* Joe's Keyboard shortcuts
+#+BEGIN_SRC emacs-lisp
+;; windows like select and cut/paste
+;; https://groups.google.com/forum/#!topic/gnu.emacs.help/79N51n6NUfs
+;; this must be above the cua-mode t:
+(setq cua-remap-control-z nil) 
+(cua-mode t) 
+(setq cua-auto-tabify-rectangles nil) ;; Don't tabify after rectangle commands
+(transient-mark-mode 1) ;; No region when it is not highlighted
+;;(setq cua-keep-region-after-copy nil) ;; Standard Windows behaviour
+
+;; problem is that ctrl-z no longer works.  ctrl-c ctrl-z:
+;; -------------------------------------------------------------------------------
+;; my key-bindings
+(global-set-key [(home)] (quote beginning-of-buffer))
+(global-set-key [(end)] (quote end-of-buffer))
+(global-set-key [(select)] (quote end-of-buffer))
+
+;; why does this not come out on terminal?
+(global-set-key (kbd "C-<return>") 'quickrun)
+
+;; increase/decrease font size
+
+(global-set-key (kbd "C-+") 'zoom-in)
+(global-set-key (kbd "C-=") 'zoom-in)
+(global-set-key (kbd "C--") 'zoom-out)
+
+;; toggle full screen
+(global-set-key (kbd "<f11>") 'toggle-frame-fullscreen)
+
+(global-set-key (kbd "C-r") 'buffer-menu-other-window)
+
+(global-set-key (kbd "M-/") 'hippie-expand)
+(global-set-key (kbd "C-x C-b") 'ibuffer)
+
+(global-set-key (kbd "C-s") 'isearch-forward-regexp)
+;;(global-set-key (kbd "C-r") 'isearch-backward-regexp)
+(global-set-key (kbd "C-M-s") 'isearch-forward)
+(global-set-key (kbd "C-M-r") 'isearch-backward)
+
+;; toggle line numbers
+(global-set-key (kbd "C-l") 'linum-mode)
+
+;; search everything?
+;; http://oremacs.com/2016/07/29/brand-new-swiper-all/
+(global-set-key (kbd "C-c u") 'swiper-all)
+
+
+#+END_SRC
+
+
+* Sane defaults
+
+Let's start with some sane defaults, shall we?
+
+Sources for this section include [[https://github.com/magnars/.emacs.d/blob/master/settings/sane-defaults.el][Magnars Sveen]] and [[http://pages.sachachua.com/.emacs.d/Sacha.html][Sacha Chua]].
+
+#+begin_src emacs-lisp
+;; These functions are useful. Activate them.
+(put 'downcase-region 'disabled nil)
+(put 'upcase-region 'disabled nil)
+(put 'narrow-to-region 'disabled nil)
+(put 'dired-find-alternate-file 'disabled nil)
+
+(setq initial-scratch-message "")
+;; Answering just 'y' or 'n' will do
+(defalias 'yes-or-no-p 'y-or-n-p)
+
+(setq vc-follow-symlinks t )       ; don't ask for confirmation when opening symlinked file
+
+(setq backup-directory-alist `(("." . "~/.emacs-backups/backups")) ) 
+
+(setq auto-save-file-name-transforms '((".*" "~/.emacs-backups/auto-save-list/" t)) ) 
+;; does this prevent ~/.emacs.d/auto-save-list/ from being created?  hope so.
+(setq auto-save-list-file-prefix nil)
+
+;; UTF-8 please
+(setq locale-coding-system 'utf-8) ; pretty
+(set-terminal-coding-system 'utf-8) ; pretty
+(set-keyboard-coding-system 'utf-8) ; pretty
+(set-selection-coding-system 'utf-8) ; please
+(prefer-coding-system 'utf-8) ; with sugar on top
+(setq-default indent-tabs-mode nil)
+
+;; Turn off the blinking cursor
+;;(blink-cursor-mode -1)
+
+(setq-default indent-tabs-mode nil)
+(setq-default indicate-empty-lines t)
+
+;; Don't count two spaces after a period as the end of a sentence.
+;; Just one space is needed.
+(setq sentence-end-double-space nil)
+
+;; delete the region when typing, just like as we expect nowadays.
+(delete-selection-mode t)
+
+(show-paren-mode t)
+
+(column-number-mode t)
+
+;;(global-visual-line-mode)
+;;(diminish 'visual-line-mode)
+
+(setq uniquify-buffer-name-style 'forward)
+
+;; -i gets alias definitions from .bash_profile
+(setq shell-command-switch "-ic")
+
+;; Don't beep at me
+(setq visible-bell t)
+
+
+(setq scroll-step 1) ; "Normal" scrolling, not the massive 1/2 screen jump.
+;; indentation level
+(setq-default c-basic-offset 2)
+(setq default-tab-width 2)
+
+#+end_src
+
+The following function for ~occur-dwim~ is taken from [[https://github.com/abo-abo][Oleh Krehel]] from
+[[http://oremacs.com/2015/01/26/occur-dwim/][his blog post at (or emacs]]. It takes the current region or the symbol
+at point as the default value for occur.
+
+#+begin_src emacs-lisp
+(defun occur-dwim ()
+  "Call `occur' with a sane default."
+  (interactive)
+  (push (if (region-active-p)
+            (buffer-substring-no-properties
+             (region-beginning)
+             (region-end))
+          (thing-at-point 'symbol))
+        regexp-history)
+  (call-interactively 'occur))
+
+(bind-key "M-s o" 'occur-dwim)
+#+end_src
+
+Here we make page-break characters look pretty, instead of appearing
+as =^L= in Emacs. [[http://ericjmritz.name/2015/08/29/using-page-breaks-in-gnu-emacs/][Here's an informative article called "Using
+Page-Breaks in GNU Emacs" by Eric J. M. Ritz.]]
+
+#+begin_src emacs-lisp
+(use-package page-break-lines
+  :ensure t)
+#+end_src
+Set up the customize file to its own separate file, instead of saving
+customize settings in [[file:init.el][init.el]].
+
+#+begin_src emacs-lisp
+(setq custom-file (expand-file-name "custom.el" user-emacs-directory))
+(when (file-exists-p custom-file) (load custom-file))
+
+#+end_src
+
+* Misc stuff
+
+  Misc stuff i find around the internets
+#+BEGIN_SRC emacs-lisp
+;; -------------------------------------------------------------------------------
+;; comment of uncomment current line or region
+;; http://stackoverflow.com/questions/9688748/emacs-comment-uncomment-current-line
+(defun comment-or-uncomment-region-or-line ()
+  "Comments or uncomments the region or the current line if there's no active region."
+  (interactive)
+  (let (beg end)
+    (if (region-active-p)
+	(setq beg (region-beginning) end (region-end))
+      (setq beg (line-beginning-position) end (line-end-position)))
+    (comment-or-uncomment-region beg end)
+    (next-line)))
+;; can't map ctrl-; :-(
+(global-set-key (kbd "M-;") 'comment-or-uncomment-region-or-line)
+
+
+;; -------------------------------------------------------------------------------
+;; make scripts executable if they start with shebang
+(defun hlu-make-script-executable ()
+  "If file starts with a shebang, make `buffer-file-name' executable"
+  (save-excursion
+    (save-restriction
+      (widen)
+      (goto-char (point-min))
+      (when (and (looking-at "^#!")
+                  (not (file-executable-p buffer-file-name)))
+        (set-file-modes buffer-file-name
+                        (logior (file-modes buffer-file-name) #o100))
+        (message (concat "Made " buffer-file-name " executable"))))))
+
+(add-hook 'after-save-hook 'hlu-make-script-executable)
+
+;; -------------------------------------------------------------------------------
+;; toggle vertical and horizontal window split
+;; this only seems to work when window count is 2...
+(defun toggle-window-split ()
+  (interactive)
+  (if (= (count-windows) 2)
+      (let* ((this-win-buffer (window-buffer))
+         (next-win-buffer (window-buffer (next-window)))
+         (this-win-edges (window-edges (selected-window)))
+         (next-win-edges (window-edges (next-window)))
+         (this-win-2nd (not (and (<= (car this-win-edges)
+                     (car next-win-edges))
+                     (<= (cadr this-win-edges)
+                     (cadr next-win-edges)))))
+         (splitter
+          (if (= (car this-win-edges)
+             (car (window-edges (next-window))))
+          'split-window-horizontally
+        'split-window-vertically)))
+    (delete-other-windows)
+    (let ((first-win (selected-window)))
+      (funcall splitter)
+      (if this-win-2nd (other-window 1))
+      (set-window-buffer (selected-window) this-win-buffer)
+      (set-window-buffer (next-window) next-win-buffer)
+      (select-window first-win)
+      (if this-win-2nd (other-window 1))))))
+
+(global-set-key (kbd "C-x |") 'toggle-window-split)
+
+;; -------------------------------------------------------------------------------
+;; file registers for quick open  (C-x r j e) for quick open
+(set-register ?c '(file . "~/.ssh/config"))
+(set-register ?e '(file . "~/.emacs.d/init.el"))
+(set-register ?n '(file . "~/notes/anotes.txt"))
+
+;; alt-insert to reload init file
+(global-set-key [M-insert] '(lambda() (interactive) (load-file "~/.emacs.d/init.el")))
+
+#+END_SRC
+  
+* Theme
+
+** Cyberpunk theme
+
+The [[https://github.com/n3mo/cyberpunk-theme.el][cyberpunk theme]] is dark and colorful. However, I don't like the
+boxes around the mode line.
+
+#+begin_src emacs-lisp
+(use-package cyberpunk-theme
+  :if (window-system)
+  :ensure t
+  :init
+  (progn
+    (load-theme 'cyberpunk t)
+    (set-face-attribute `mode-line nil
+                        :box nil)
+    (set-face-attribute `mode-line-inactive nil
+                        :box nil)))
+#+end_src
+
+I tend to switch themes more often than normal. For example, switching
+to a lighter theme (such as the default) or to a different theme
+depending on the time of day or my mood. Normally, switching themes is
+a multi-step process with ~disable-theme~ and ~load-theme~. The
+~switch-theme~ function will do that in one swoop. I just choose which
+theme I want to go to.
+
+** Solarized theme
+
+Here's some configuration for [[https://github.com/bbatsov/solarized-emacs/][bbatsov's solarized themes]].
+
+#+begin_src emacs-lisp
+(use-package solarized-theme
+  :defer 10
+  :init
+  (setq solarized-use-variable-pitch nil)
+  :ensure t)
+#+end_src
+
+** Monokai theme
+
+#+begin_src emacs-lisp :tangle no
+(use-package monokai-theme
+  :if (window-system)
+  :ensure t
+  :init
+  (setq monokai-use-variable-pitch nil))
+#+end_src
+
+** Waher theme
+
+#+begin_src emacs-lisp :tangle no
+(use-package waher-theme
+  if (window-system)
+  :ensure t
+  :init
+  (load-theme 'waher))
+#+end_src
+
+** zenburn theme
+    #+BEGIN_SRC emacs-lisp
+    (use-package zenburn-theme
+      :ensure t
+      :config (load-theme 'zenburn t))
+  #+END_SRC
+
+** moe theme and leuven
+#+BEGIN_SRC emacs-lisp
+(use-package moe-theme
+  :ensure t )
+(unless  (display-graphic-p) 
+  (require 'moe-theme)
+  (moe-light))
+
+(use-package leuven-theme
+  :ensure t )
+
+(if (display-graphic-p) 
+    (load-theme 'leuven t))
+
+
+#+END_SRC
+#+BEGIN_SRC NOT-emacs-lisp
+
+(unless  (display-graphic-p) 
+  (add-to-list 'custom-theme-load-path "~/.emacs.d/moe-theme.el/")
+  (add-to-list 'load-path "~/.emacs.d/moe-theme.el/")
+
+	;;(setq moe-light-pure-white-background-in-terminal t)
+	
+  (require 'moe-theme)
+  (moe-light))
+
+;;(moe-theme-set-color 'orange)
+;; (Available colors: blue, orange, green ,magenta, yellow, purple, red, cyan, w/b.)
+(if (display-graphic-p) 
+    (load-theme 'leuven t))
+
+
+#+END_SRC
+** Convenient theme functions
+
+#+begin_src emacs-lisp
+(defun switch-theme (theme)
+  "Disables any currently active themes and loads THEME."
+  ;; This interactive call is taken from `load-theme'
+  (interactive
+   (list
+    (intern (completing-read "Load custom theme: "
+                             (mapc 'symbol-name
+                                   (custom-available-themes))))))
+  (let ((enabled-themes custom-enabled-themes))
+    (mapc #'disable-theme custom-enabled-themes)
+    (load-theme theme t)))
+
+(defun disable-active-themes ()
+  "Disables any currently active themes listed in `custom-enabled-themes'."
+  (interactive)
+  (mapc #'disable-theme custom-enabled-themes))
+
+(bind-key "<f12>" 'switch-theme)
+;;(bind-key "<f11>" 'disable-active-themes)
+#+end_src
+
+* Font
+
+[[http://adobe-fonts.github.io/source-code-pro/][Source Code Pro]] is a nice monospaced font.
+
+To install it on OS X, you can use Homebrew with [[http://caskroom.io/][Homebrew Cask]].
+
+#+begin_src sh :tangle no
+# You may need to run these two lines if you haven't set up Homebrew
+# Cask and its fonts formula.
+brew install caskroom/cask/brew-cask
+brew tap caskroom/fonts
+
+brew cask install font-source-code-pro
+#+end_src
+
+And here's how we tell Emacs to use the font we want to use.
+
+#+begin_src emacs-lisp
+(add-to-list 'default-frame-alist
+             '(font . "Source Code Pro-14"))
+#+end_src
+
+Display emojis. Source of system-specific fonts is in [[https://github.com/syohex/emacs-ac-emoji][the README for
+the emacs-ac-emoji package.]]
+
+#+BEGIN_SRC emacs-lisp
+(let ((font (if (= emacs-major-version 25)
+                "Symbola"
+              (cond ((string-equal system-type "darwin")    "Apple Color Emoji")
+                    ((string-equal system-type "gnu/linux") "Symbola")))))
+  (set-fontset-font t 'unicode font nil 'prepend))
+#+END_SRC
+
+* Joe's ELPA packages
+** zoom-frm
+#+BEGIN_SRC emacs-lisp
+(use-package zoom-frm
+  :ensure t)
+#+END_SRC
+
+** Auto-complete
+  This is a really simple auto-complete based. Maybe soon, 
+  try company-mode for a more complete package.
+
+  #+BEGIN_SRC emacs-lisp
+    (use-package auto-complete
+      :ensure t
+      :init
+      (ac-config-default)
+      (global-auto-complete-mode t))
+  #+END_SRC
+
+** Fly Check
+  #+BEGIN_SRC emacs-lisp
+    (use-package flycheck
+      :ensure t
+      :init
+      (global-flycheck-mode t)
+      :config
+      (setq-default flycheck-disabled-checkers '(emacs-lisp-checkdoc)))
+  #+END_SRC
+
+** YASnippets
+  #+BEGIN_SRC emacs-lisp
+    (use-package yasnippet
+      :ensure t
+      :init
+      (yas-global-mode 1))
+  #+END_SRC
+
+** PHP Mode
+  #+BEGIN_SRC emacs-lisp
+    (use-package php-mode
+      :ensure t)
+  #+END_SRC
+
+** Web Mode
+  #+BEGIN_SRC emacs-lisp
+    (use-package web-mode
+      :ensure t
+      :config
+      (add-to-list 'auto-mode-alist '("\\.html\\.php\\'" . web-mode))
+      (add-to-list 'auto-mode-alist '("\\.txt\\.php\\'" . web-mode))
+      (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode)))
+  #+END_SRC
+
+
+
+* Some notes
+  C-c '    will open an editor, repeat C-c ' to return indented code 
+  <sTAB    will create an Org mode source block
+  C-x C-e  to execute previous code block
+
+  couple of things would like to do:
+  - how to comment out region so that babel does not tangle those?
+  - how to show raw code (turn off org-mode? )  
+
+
+* Temporary Snippets
+  These are things that are often added/removed for a session
+
+  #+BEGIN_SRC emacs-lisp
+  (set-face-attribute 'default nil :height 130)
+  #+END_SRC
+
+
+* Interface Tweaks
+  Let's get this strait. I don't work on January 8th.
+
+  #+BEGIN_SRC emacs-lisp
+    (setq inhibit-startup-message t)
+    (setq column-number-mode t)
+    (tool-bar-mode -1)
+    (scroll-bar-mode -1)
+    (fset 'yes-or-no-p 'y-or-n-p)
+    (global-set-key (kbd "<f5>") 'revert-buffer)
+    (defalias 'list-buffers 'ibuffer)
+    ;(defalias 'list-buffers 'ibuffer-other-window)
+    (add-to-list 'default-frame-alist '(height . 50))
+    (add-to-list 'default-frame-alist '(width . 80))
+  #+END_SRC
+
+
+
+* Try Package
+  Allows you to try a package (run via 'try)
+
+  #+BEGIN_SRC emacs-lisp
+    (use-package try 
+      :ensure t)
+  #+END_SRC
+
+
+* Which Key
+  Displays keyboard help in the mini-buffer
+
+  #+BEGIN_SRC emacs-lisp
+    (use-package which-key
+      :ensure t 
+      :config
+      (which-key-mode))
+  #+END_SRC
+  
+
+* Org-mode Tweaks
+
+  #+BEGIN_SRC emacs-lisp
+    (use-package org-bullets
+      :ensure t
+      :config
+      (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+
+;; http://stackoverflow.com/questions/12737317/collapsing-the-current-outline-in-emacs-org-mode
+;; cycle anywhere?
+;; don't really like it.. need another key
+;;(setq org-cycle-emulate-tab 'white)
+
+  #+END_SRC
+  
+  
+* Ido Setup
+  Ido all the things!!!
+
+  #+BEGIN_SRC NOT-emacs-lisp
+    (setq ido-enable-flex-matching t)
+    (setq ido-everywhere t)
+    (ido-mode 1)
+  #+END_SRC
+
+
+* Ace Window Pakage
+  This makes switching between windows more sane.
+
+  #+BEGIN_SRC emacs-lisp
+    (use-package ace-window
+      :ensure t
+      :init
+      (global-set-key [remap other-window] 'ace-window)
+      (custom-set-faces
+       '(aw-leading-char-face
+         ((t (:inherit ace-jump-face-foreground :height 3.0))))))
+  #+END_SRC
+
+
+
+* Swiper and Friends
+  I don't know how people live in Emacs without these things.
+
+  #+BEGIN_SRC emacs-lisp
+    (use-package counsel
+      :ensure t)
+
+    (use-package swiper
+      :ensure t
+      :config
+      (progn
+        (ivy-mode 1)
+        (setq ivy-use-virtual-buffers t)
+        (global-set-key "\C-s" 'swiper)
+        (global-set-key (kbd "C-c C-r") 'ivy-resume)
+        (global-set-key (kbd "<f6>") 'ivy-resume)
+        (global-set-key (kbd "M-x") 'counsel-M-x)
+        (global-set-key (kbd "C-x C-f") 'counsel-find-file)
+        (global-set-key (kbd "<f1> f") 'counsel-describe-function)
+        (global-set-key (kbd "<f1> v") 'counsel-describe-variable)
+        (global-set-key (kbd "<f1> l") 'counsel-load-library)
+        (global-set-key (kbd "<f2> i") 'counsel-info-lookup-symbol)
+        (global-set-key (kbd "<f2> u") 'counsel-unicode-char)
+        (global-set-key (kbd "C-c g") 'counsel-git)
+        (global-set-key (kbd "C-c j") 'counsel-git-grep)
+        (global-set-key (kbd "C-c k") 'counsel-ag)
+        (global-set-key (kbd "C-x l") 'counsel-locate)
+        (global-set-key (kbd "C-S-o") 'counsel-rhythmbox)
+        (define-key read-expression-map (kbd "C-r") 'counsel-expression-history)))
+  #+END_SRC
+
+
+* Avy Package (char: <jump>)
+
+  #+BEGIN_SRC emacs-lisp
+    (use-package avy
+      :ensure t
+      :bind ("M-s" . avy-goto-char))
+  #+END_SRC
+
+
+
+* Expand Region
+  #+BEGIN_SRC emacs-lisp
+    (use-package expand-region
+      :ensure t
+      :bind ("C-=" . er/expand-region))
+  #+END_SRC
+
