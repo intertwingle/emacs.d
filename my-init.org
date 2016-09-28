@@ -1,5 +1,6 @@
 #+STARTUP: overview
 
+
 * Joe's Keyboard shortcuts
 #+BEGIN_SRC emacs-lisp
 ;; windows like select and cut/paste
@@ -47,10 +48,30 @@
 ;; http://oremacs.com/2016/07/29/brand-new-swiper-all/
 (global-set-key (kbd "C-c u") 'swiper-all)
 
+;; kills current buffer.  asks if unsaved changes
+(global-set-key (kbd "C-x k") 'kill-this-buffer)
+
+; use shift-tab to decrease indent
+(global-set-key (kbd "<backtab>") 'decrease-left-margin)
+
+
+; auto-indent on pressing enter
+(define-key global-map (kbd "RET") 'newline-and-indent)
+
+
+; Set shortcut for jumping to the last change location. C-q was originally
+; bound to 'quoted-insert
+(global-set-key (kbd "C-q") 'goto-last-change)
+
+;; multiple cursors
+(global-unset-key (kbd "M-<down-mouse-1>"))
+(global-set-key (kbd "M-<mouse-1>") 'mc/add-cursor-on-click)
+
+
 
 #+END_SRC
 
-
+  
 * Sane defaults
 
 Let's start with some sane defaults, shall we?
@@ -58,6 +79,11 @@ Let's start with some sane defaults, shall we?
 Sources for this section include [[https://github.com/magnars/.emacs.d/blob/master/settings/sane-defaults.el][Magnars Sveen]] and [[http://pages.sachachua.com/.emacs.d/Sacha.html][Sacha Chua]].
 
 #+begin_src emacs-lisp
+;; let's try it.  auto select 
+;; http://pragmaticemacs.com/emacs/automatically-copy-text-selected-with-the-mouse/
+
+(setq mouse-drag-copy-region t)
+
 ;; These functions are useful. Activate them.
 (put 'downcase-region 'disabled nil)
 (put 'upcase-region 'disabled nil)
@@ -225,7 +251,7 @@ customize settings in [[file:init.el][init.el]].
 ;; -------------------------------------------------------------------------------
 ;; file registers for quick open  (C-x r j e) for quick open
 (set-register ?c '(file . "~/.ssh/config"))
-(set-register ?e '(file . "~/.emacs.d/init.el"))
+(set-register ?e '(file . "~/.emacs.d/my-init.org"))
 (set-register ?n '(file . "~/notes/anotes.txt"))
 
 ;; alt-insert to reload init file
@@ -304,8 +330,11 @@ Here's some configuration for [[https://github.com/bbatsov/solarized-emacs/][bba
 (use-package moe-theme
   :ensure t )
 (unless  (display-graphic-p) 
-  (require 'moe-theme)
-  (moe-light))
+  (load-theme 'moe-light t))
+
+;;  (require 'moe-theme)
+;;  (message "loading moe)
+;;  (moe-light))
 
 (use-package leuven-theme
   :ensure t )
@@ -315,24 +344,7 @@ Here's some configuration for [[https://github.com/bbatsov/solarized-emacs/][bba
 
 
 #+END_SRC
-#+BEGIN_SRC NOT-emacs-lisp
 
-(unless  (display-graphic-p) 
-  (add-to-list 'custom-theme-load-path "~/.emacs.d/moe-theme.el/")
-  (add-to-list 'load-path "~/.emacs.d/moe-theme.el/")
-
-	;;(setq moe-light-pure-white-background-in-terminal t)
-	
-  (require 'moe-theme)
-  (moe-light))
-
-;;(moe-theme-set-color 'orange)
-;; (Available colors: blue, orange, green ,magenta, yellow, purple, red, cyan, w/b.)
-(if (display-graphic-p) 
-    (load-theme 'leuven t))
-
-
-#+END_SRC
 ** Convenient theme functions
 
 #+begin_src emacs-lisp
@@ -443,7 +455,80 @@ the emacs-ac-emoji package.]]
       (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode)))
   #+END_SRC
 
+** projectile
+   #+BEGIN_SRC emacs-lisp
 
+    (use-package projectile
+      :ensure t)
+
+    (use-package counsel-projectile
+      :ensure t)
+
+   
+
+   #+END_SRC
+     
+** neotree
+      #+BEGIN_SRC emacs-lisp
+
+        (use-package neotree
+         :ensure t)
+        (global-set-key [f8] 'neotree-toggle)
+
+      #+END_SRC 
+** coffeescript
+      #+BEGIN_SRC emacs-lisp
+
+        (use-package coffee-mode
+         :ensure t)
+          (custom-set-variables
+             '(coffee-tab-width 2)
+             '(coffee-args-compile '("-c" "--no-header" "--bare")))
+
+         (eval-after-load "coffee-mode"
+            '(progn
+           (define-key coffee-mode-map [(meta r)] 'coffee-compile-buffer)
+           (define-key coffee-mode-map (kbd "C-j") 'coffee-newline-and-indent)))
+
+
+
+      #+END_SRC 
+
+** multiple cursors
+      #+BEGIN_SRC emacs-lisp
+        (use-package multiple-cursors
+         :ensure t)
+      #+END_SRC 
+
+
+** magit
+  from https://github.com/0x7cc/.emacs.d/blob/master/config/301-magit.org
+   #+begin_src emacs-lisp
+    (use-package magit
+      :ensure
+      :config
+      (progn
+	(set-variable 'magit-emacsclient-executable (executable-find "emacsclient"))
+	(setq magit-default-tracking-name-function 'magit-default-tracking-name-branch-only)
+	(setq magit-set-upstream-on-push t)
+	(setq magit-completing-read-function 'magit-ido-completing-read)
+	(setq magit-stage-all-confirm nil)
+	(setq magit-unstage-all-confirm nil)
+	(setq magit-last-seen-setup-instructions "2.1.0"))
+      :init
+      (progn
+	(use-package magit-blame))
+      :bind ("C-x g" . magit-status))
+   #+end_src
+** mwim
+      #+BEGIN_SRC emacs-lisp
+        ;; https://github.com/alezost/mwim.el
+        (use-package mwim
+             :ensure t)
+        (global-set-key (kbd "C-a") 'mwim-beginning-of-code-or-line)
+        (global-set-key (kbd "C-e") 'mwim-end-of-code-or-line)
+
+      #+END_SRC 
 
 * Some notes
   C-c '    will open an editor, repeat C-c ' to return indented code 
@@ -506,8 +591,14 @@ the emacs-ac-emoji package.]]
   #+BEGIN_SRC emacs-lisp
     (use-package org-bullets
       :ensure t
-      :config
+      :config 
       (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+
+   ;; http://stackoverflow.com/questions/15773354/indent-code-in-org-babel-src-blocks
+   (setq org-src-tab-acts-natively t)
+
+   ;; syntax highlite color?
+   (setq org-src-fontify-natively t)
 
 ;; http://stackoverflow.com/questions/12737317/collapsing-the-current-outline-in-emacs-org-mode
 ;; cycle anywhere?
@@ -517,14 +608,14 @@ the emacs-ac-emoji package.]]
   #+END_SRC
   
   
-* Ido Setup
-  Ido all the things!!!
+* Ido  etup
+  Ido  ll the things!!!
 
-  #+BEGIN_SRC NOT-emacs-lisp
-    (setq ido-enable-flex-matching t)
-    (setq ido-everywhere t)
-    (ido-mode 1)
-  #+END_SRC
+  #+BE IN_SRC NOT-emacs-lisp
+    (s tq ido-enable-flex-matching t)
+    (s tq ido-everywhere t)
+    (i o-mode 1)
+  #+EN _SRC
 
 
 * Ace Window Pakage
