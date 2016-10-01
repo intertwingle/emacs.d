@@ -67,6 +67,18 @@
 (global-unset-key (kbd "M-<down-mouse-1>"))
 (global-set-key (kbd "M-<mouse-1>") 'mc/add-cursor-on-click)
 
+;; http://stackoverflow.com/questions/14066526/unset-tab-binding-for-yasnippet
+(setq yas-minor-mode-map ;This MUST before (require 'yasnippet)
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "M-i") 'yas-expand)
+    (define-key map "\C-c&\C-n" 'yas-new-snippet)
+    (define-key map "\C-c&\C-v" 'yas-visit-snippet-file)
+    map)) 
+
+(require 'yasnippet)
+
+
+
 
 
 #+END_SRC
@@ -79,6 +91,17 @@ Let's start with some sane defaults, shall we?
 Sources for this section include [[https://github.com/magnars/.emacs.d/blob/master/settings/sane-defaults.el][Magnars Sveen]] and [[http://pages.sachachua.com/.emacs.d/Sacha.html][Sacha Chua]].
 
 #+begin_src emacs-lisp
+
+(setq-default fill-column 65)
+(add-hook 'text-mode-hook 'turn-on-auto-fill)
+(add-hook 'text-mode-hook 'turn-on-flyspell)
+
+  (setq default-abbrev-mode t)
+
+  ;; If you only want it on in text and derived modes, 
+  ;; you could do something like this:
+  (add-hook 'text-mode-hook (lambda () (abbrev-mode 1)))
+
 ;; let's try it.  auto select 
 ;; http://pragmaticemacs.com/emacs/automatically-copy-text-selected-with-the-mouse/
 
@@ -413,13 +436,38 @@ the emacs-ac-emoji package.]]
   This is a really simple auto-complete based. Maybe soon, 
   try company-mode for a more complete package.
 
-  #+BEGIN_SRC emacs-lisp
+  #+BEGIN_SRC NOTemacs-lisp
     (use-package auto-complete
       :ensure t
       :init
       (ac-config-default)
       (global-auto-complete-mode t))
   #+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+(use-package company
+  :ensure t
+  :init (global-company-mode)
+)
+(setq company-dabbrev-downcase 0)
+(setq company-idle-delay 0)
+;; XXX what is this?  not found
+;;(company-quickhelp-mode 1)
+
+(setq company-minimum-prefix-length 1)
+
+;; Add yasnippet support for all company backends
+(defvar company-mode/enable-yas t
+"Enable yasnippet for all backends.")
+(defun company-mode/backend-with-yas (backend)
+(if (or (not company-mode/enable-yas) (and (listp backend) (member 'company-yasnippet backend)))
+    backend
+    (append (if (consp backend) backend (list backend))
+            '(:with company-yasnippet))))
+(setq company-backends (mapcar #'company-mode/backend-with-yas company-backends))
+
+
+#+END_SRC
 
 ** Fly Check
   #+BEGIN_SRC emacs-lisp
@@ -503,7 +551,7 @@ the emacs-ac-emoji package.]]
 
 ** magit
   from https://github.com/0x7cc/.emacs.d/blob/master/config/301-magit.org
-   #+begin_src emacs-lisp
+   #+begin_src NOTemacs-lisp
     (use-package magit
       :ensure
       :config
@@ -530,6 +578,13 @@ the emacs-ac-emoji package.]]
 
       #+END_SRC 
 
+** hackernews
+      #+BEGIN_SRC emacs-lisp
+        ;; https://github.com/clarete/hackernews.el
+        (use-package hackernews
+             :ensure t)
+       #+END_SRC
+
 * Some notes
   C-c '    will open an editor, repeat C-c ' to return indented code 
   <sTAB    will create an Org mode source block
@@ -538,6 +593,693 @@ the emacs-ac-emoji package.]]
   couple of things would like to do:
   - how to comment out region so that babel does not tangle those?
   - how to show raw code (turn off org-mode? )  
+
+
+* Shell autocomplete stuff
+ also check out this to rsync after save for remote projects:
+http://lazier.cwchang.me/2016/07/11/Emacs-run-script-after-save/
+
+;; === After save hook function for projectile ===
+(defun pj-run-after-save ()
+  "Run script to sync on save"
+  (if (and (projectile-project-p)
+           (file-executable-p (projectile-file-truename "run_after_save")))
+      (shell-command (projectile-file-truename "run_after_save"))
+    )
+  )
+
+(add-hook 'after-save-hook 'pj-run-after-save)
+;; ===============================================
+
+  #+BEGIN_SRC emacs-lisp
+  
+
+  #+END_SRC
+
+This is from the writer:
+* experiments - tested
+** words - some interesting utilities for text in Emacs
+The idea is a command called words that will be run interactively. It
+will grab the word at point, or operate on a selected region, and then
+offer a menu to lookup the definition, find it in a thesaurus, google
+it, etc.
+
+We structure the code so you can add functions to it later, without
+directly modifying this code. The only limitation of this code is that
+the functions must have a signature with no arguments. That does not
+seem terribly limiting, as we can check for a region, and use it if we
+want (see the words-google function).
+
+#+BEGIN_SRC emacs-lisp
+(defun words-dictionary ()
+  (interactive)
+  (browse-url
+   (format
+    "http://dictionary.reference.com/browse/%s?s=t"
+    (thing-at-point 'word))))
+
+(defun words-thesaurus ()
+  (interactive)
+  (browse-url
+   (format
+    "http://www.thesaurus.com/browse/%s"
+    (thing-at-point 'word))))
+
+(defun words-google ()
+  (interactive)
+  (browse-url
+   (format
+    "http://www.google.com/search?q=%s"
+    (if (region-active-p)
+	(url-hexify-string (buffer-substring (region-beginning)
+					     (region-end)))
+      (thing-at-point 'word)))))
+
+
+(defvar words-funcs '()
+ "functions to run in `words'. Each entry is a list of (key menu-name function).")
+
+(setq words-funcs
+  '(("d" "ictionary" words-dictionary)
+    ("t" "hesaurus" words-thesaurus)
+    ("g" "oogle" words-google)))
+
+
+(defun words ()
+  (interactive)
+   (message
+   (concat
+    (mapconcat
+     (lambda (tup)
+       (concat "[" (elt tup 0) "]"
+	       (elt tup 1) " "))
+     words-funcs "") ": "))
+   (let ((input (read-char-exclusive)))
+     (funcall
+      (elt
+       (assoc
+	(char-to-string input) words-funcs)
+       2))))
+#+END_SRC
+
+#+RESULTS:
+: words
+
+This works nicely. Now, let us add a new function that looks up the
+word or selection on twitter. We just define a new function, and add
+the menu selection to the words-func variable.
+
+#+BEGIN_SRC emacs-lisp
+(defun words-twitter ()
+  (interactive)
+  (browse-url
+   (format
+    "https://twitter.com/search?q=%s"
+    (if (region-active-p)
+	(url-hexify-string (buffer-substring (region-beginning)
+					     (region-end)))
+      (thing-at-point 'word)))))
+
+(add-to-list 'words-funcs
+  '("w" "twitter" words-twitter)
+  t) ; append
+
+#+END_SRC
+
+#+RESULTS:
+| d | ictionary | words-dictionary |
+| t | hesaurus  | words-thesaurus  |
+| g | oogle     | words-google     |
+| w | twitter   | words-twitter    |
+
+Finally, the most complicated idea: spelling and grammar. I know there is flyspell, and such, but they are build on an ancient dictionary. Here, for fun, we explore a web api. This next function is not a trivial one, and I will not explain it here beyond saying it sends a selection of text to a url, gets an xml response back, and that response is parsed and printed to a buffer by this function. The main point is to illustrate we can do interesting things with a selection of text!
+
+#+BEGIN_SRC emacs-lisp
+(defun words-atd ()
+  "Send paragraph at point to After the deadline for spell and grammar checking."
+  (interactive)
+
+  (let* ((url-request-method "POST")
+	 (url-request-data (format
+			    "key=some-random-text-&data=%s"
+			    (url-hexify-string
+			     (thing-at-point 'paragraph))))
+	 (xml  (with-current-buffer
+		   (url-retrieve-synchronously
+		    "http://service.afterthedeadline.com/checkDocument")
+		 (xml-parse-region url-http-end-of-headers (point-max))))
+	 (results (car xml))
+	 (errors (xml-get-children results 'error)))
+
+    (switch-to-buffer-other-frame "*ATD*")
+    (erase-buffer)
+    (dolist (err errors)
+      (let* ((children (xml-node-children err))
+	     ;; for some reason I could not get the string out, and had to do this.
+	     (s (car (last (nth 1 children))))
+	     ;; the last/car stuff doesn't seem right. there is probably
+	     ;; a more idiomatic way to get this
+	     (desc (last (car (xml-get-children children 'description))))
+	     (type (last (car (xml-get-children children 'type))))
+	     (suggestions (xml-get-children children 'suggestions))
+	     (options (xml-get-children (xml-node-name suggestions) 'option))
+	     (opt-string  (mapconcat
+			   (lambda (el)
+			     (when (listp el)
+			       (car (last el))))
+			   options
+			   " ")))
+
+	(insert (format "** %s ** %s
+Description: %s
+Suggestions: %s
+
+" s type desc opt-string))))))
+
+(add-to-list 'words-funcs
+  '("s" "spell/grammar" words-atd)
+  t) ; append
+#+END_SRC
+
+#+RESULTS:
+: words-atd
+
+My final words menu looks like:
+#+attr_html: :width 400
+[[./images/final-menu.png]]
+
+If I have the cursor in the previous paragraph, run the words command and select "s" I get a buffer with these contents:
+
+#+BEGIN_EXAMPLE
+*** flyspell ** (spelling)
+Description: (Spelling)
+Suggestions: flywheel flyball
+
+*** are build on ** (grammar)
+Description: (Auxiliary Verb Agreement)
+Suggestions: are built on
+
+*** api ** (spelling)
+Description: (Spelling)
+Suggestions: app ape apt ai ami
+
+*** url ** (spelling)
+Description: (Spelling)
+Suggestions: urn ure curl hurl burl
+
+*** xml ** (spelling)
+Description: (Spelling)
+Suggestions: xl ml
+
+*** selection ** (suggestion)
+Description: (Complex Expression)
+Suggestions: choice
+
+*** an xml ** (grammar)
+Description: (Wrong article)
+Suggestions: a xml
+
+*** a selection of ** (grammar)
+Description: (Hidden Verbs)
+Suggestions:
+
+*** is parsed ** (grammar)
+Description: (Passive voice)
+Suggestions:
+
+*** selection ** (suggestion)
+Description: (Complex Expression)
+Suggestions: choice
+
+*** a selection of ** (grammar)
+Description: (Hidden Verbs)
+Suggestions:
+#+END_EXAMPLE
+
+It might be nice to link back to those words, so you could click on them and fix them, but that is a beyond today's goal. In summary, today we looked at a framework to create a user-modifiable menu of commands that are launched from a single command. Here we called the command words, and then built up some different things we might want to do with the word or selection at point. While you can of course just remember the individual commands, remembering one command and then being prompted might have some advantages.
+
+Source: tk
+
+** invisible text in Emacs
+Source:    [[http://kitchingroup.cheme.cmu.edu/blog/2014/02/06/Invisible-text-in-Emacs/][invisible text in Emacs]]
+
+** Making org-mode links to files in Emacs packages
+#+BEGIN_EXAMPLE
+Today I will make a new org-mode link that lets me make links to files inside of Emacs packages. These files may be installed in different places on different systems (e.g. in the system directory, in ELPA directories, or in custom directories), so we need a way to construct paths to them. The application of this is eventually I hope to have some emacs packages of documentation, and I would like to have links between the packages that work no matter how they are installed.
+
+I want a syntax that looks like pkg:rainbow-mode==rainbow-mode-pkg.el. We will have a function that parses that to get the package, and the path to the file in the package. Emacs has a function to find the path to the file that defines a library. I chose == because it seems unlikely that would be a string in a package or path.
+
+#+BEGIN_SRC emacs-lisp :results value
+(locate-library "rainbow-mode")
+#+END_SRC
+
+#+RESULTS:
+: c:/Users/jkitchin/Dropbox/kitchingroup/jmax/elpa/rainbow-mode-0.9/rainbow-mode.elc
+
+We can use that to construct the path to where we want. Say we want the file named "rainbow-mode-pkg.el"
+
+#+BEGIN_SRC emacs-lisp :results value
+(expand-file-name
+ "rainbow-mode-pkg.el"
+ (file-name-directory (locate-library "rainbow-mode")))
+#+END_SRC
+
+#+RESULTS:
+: c:/Users/jkitchin/Dropbox/kitchingroup/jmax/elpa/rainbow-mode-0.9/rainbow-mode-pkg.el
+
+In org-mode links, the link path gets passed to a function. We can split the string like this to get the package and relative path we are referring to.
+
+#+BEGIN_SRC emacs-lisp :results value
+(split-string "rainbow-mode==rainbow-mode-pkg.el" "==")
+#+END_SRC
+
+#+RESULTS:
+| rainbow-mode | rainbow-mode-pkg.el |
+
+That is all of the pieces we need to construct the link function. Here it is.
+
+#+BEGIN_SRC emacs-lisp
+(org-add-link-type
+ "pkg"
+ (lambda (path)
+   (let ((pkg) (relpath)
+	 (splitpath (split-string path "==")))
+     (setq pkg (car splitpath))
+     (setq relpath (nth 1 splitpath))
+     (find-file (expand-file-name
+		 relpath
+		 (file-name-directory (locate-library pkg)))))))
+#+END_SRC
+
+#+RESULTS:
+
+pkg:rainbow-mode==rainbow-mode-pkg.el
+
+This works too, but you have to use auctex-pkg as the package name.
+
+pkg:auctex-pkg==doc/intro.texi
+
+I think that is because locate-library looks for the /file/ a library is defined in. That is not quite the same as the root directory of a package. It turns out to be a little more complicated to find that. Below is some code I hacked up looking at the package.el code. First let us examine some pieces.
+
+This gives us information about an installed package.
+
+#+BEGIN_SRC emacs-lisp :results value
+(assq 'auctex package-alist)
+#+END_SRC
+
+#+RESULTS:
+: (auctex . [(11 87 2) nil Integrated environment for *TeX*])
+
+We can get the version of the package like this
+
+#+BEGIN_SRC emacs-lisp :results value
+(package-version-join (package-desc-vers (cdr (assq 'auctex package-alist))))
+#+END_SRC
+
+#+RESULTS:
+: 11.87.2
+
+Ok, finally, we get the directory where it is installed like this:
+
+#+BEGIN_SRC emacs-lisp :results value
+(package--dir "auctex" "11.87.2")
+#+END_SRC
+
+#+RESULTS:
+: c:/Users/jkitchin/Dropbox/kitchingroup/jmax/elpa/auctex-11.87.2
+
+Note that in some places we use a package symbol, and in other places a string name.Putting that together, we have this block to get the install-dir of a package. If we have a package symbol we can get the path like this.
+
+#+BEGIN_SRC emacs-lisp :results value
+(let* ((pkg 'auctex)
+       (pkg-name (symbol-name pkg)) ; convert symbol to string
+       (desc (cdr (assq pkg package-alist)))
+       (version (package-version-join (package-desc-vers desc)))
+       (pkg-dir (package--dir pkg-name version)))
+  pkg-dir)
+#+END_SRC
+
+#+RESULTS:
+: c:/Users/jkitchin/Dropbox/kitchingroup/jmax/elpa/auctex-11.87.2
+
+Usually, we will have a string though. We just have to make it a symbol with the =intern= function.
+
+#+BEGIN_SRC emacs-lisp :results value
+(setq pkg-name "auctex")
+(setq pkg (intern pkg-name))
+(setq desc (cdr (assq pkg package-alist)))
+#+END_SRC
+
+#+RESULTS:
+: [(11 87 2) nil "Integrated environment for *TeX*"]
+
+Now, we have all the pieces to get the path from a package name in a string:
+
+#+BEGIN_SRC emacs-lisp :results value
+(let* ((pkg-name "auctex")
+       (pkg (intern pkg-name))
+       (desc (cdr (assq pkg package-alist)))
+       (version (package-version-join (package-desc-vers desc)))
+       (pkg-dir (package--dir pkg-name version)))
+  pkg-dir)
+#+END_SRC
+
+#+RESULTS:
+: c:/Users/jkitchin/Dropbox/kitchingroup/jmax/elpa/auctex-11.87.2
+
+Let us use that to rewrite the link, and address a few other limitations. We will  use =org-open-link-from-string= so we can use org-link syntax in the path part of the link, e.g. to open a file at a line, or headline. Here is our new link.
+
+#+BEGIN_SRC emacs-lisp
+(org-add-link-type
+ "pkg2"
+ (lambda (path)
+   (let ((pkg) (relpath) (pkg-dir) (link-string)
+	 (splitpath (split-string path "==")))
+     (setq pkg-name (car splitpath))
+     (setq relpath (nth 1 splitpath))
+     (setq pkg-dir (let* ((pkg-symbol (intern pkg-name)) ;convert string to pkg
+			  (desc (cdr (assq pkg-symbol package-alist)))
+			  (version (package-version-join (package-desc-vers desc)))
+			  (pkg-dir (package--dir pkg-name version)))
+		     pkg-dir))
+     (setq link-string (format "[[file:%s/%s]]" pkg-dir relpath))
+     (message "link: %s" link-string)
+     (org-open-link-from-string link-string))))
+#+END_SRC
+
+Now, we can do all of these:
+pkg2:auctex==doc/faq.texi
+pkg2:auctex==doc/faq.texi::should
+pkg2:auctex==doc/faq.texi::10
+[[pkg2:auctex==doc/faq.texi::first place]]
+
+Awesome!
+
+Just for fun, I made a toy package called =package1= in my elpa directory. That package has an org file in it. Now, I can test out the following links:
+
+pkg2:package1==intro.org
+
+pkg2:package1==intro.org::*Miscellaneous
+
+[[pkg2:package1==intro.org::*subheading with words]]
+
+pkg2:package1==intro.org::#install-section
+
+pkg2:package1==intro.org::intro-target
+
+They all work! That works for packages installed via the package manager. However, when I try this with my custom installed org-mode, it does not work. If I run (describe-package 'org) I see that org is a build in package, and that there is an alternate version avalable. It does not point to my org-installation.
+
+pkg2:org==doc/library-of-babel.org
+
+#+BEGIN_SRC emacs-lisp
+(princ (locate-library "org"))
+#+END_SRC
+
+#+RESULTS:
+: c:/Users/jkitchin/Dropbox/kitchingroup/jmax/org-mode/lisp/org.elc
+
+#+BEGIN_SRC emacs-lisp
+(princ (package-installed-p "org"))
+#+END_SRC
+
+#+RESULTS:
+: nil
+
+Obviously, we need to check if the package is installed via package.el, or if we should look somewhere else. Let us take a final stab at this. Let us review the challenge.
+
+#+BEGIN_SRC emacs-lisp
+(print (locate-library "auctex"))
+(print (locate-library "auctex-autoloads"))
+#+END_SRC
+
+#+RESULTS:
+:
+: nil
+:
+: "c:/Users/jkitchin/Dropbox/kitchingroup/jmax/elpa/auctex-11.87.2/auctex-autoloads.el"
+
+We may have to check for a package-autoloads. Ww can wrap that in an =or= macro, which will return the first non-nil result.
+
+#+BEGIN_SRC emacs-lisp :results value
+(let ((pkg-name "auctex"))
+   (file-name-directory
+    (or (locate-library pkg-name)
+	(locate-library (format "%s-autoloads" pkg-name)))))
+#+END_SRC
+
+#+RESULTS:
+: c:/Users/jkitchin/Dropbox/kitchingroup/jmax/elpa/auctex-11.87.2/
+
+Doing this on the org package shows that this points to a lisp directory.
+#+BEGIN_SRC emacs-lisp :results value
+(let ((pkg-name "org"))
+   (file-name-directory
+    (or (locate-library pkg-name)
+	(locate-library (format "%s-autoloads" pkg-name)))))
+#+END_SRC
+
+#+RESULTS:
+: c:/Users/jkitchin/Dropbox/kitchingroup/jmax/org-mode/lisp/
+
+So, let's try a final link function.
+
+#+BEGIN_SRC emacs-lisp
+(org-add-link-type
+ "pkg3"
+ (lambda (path)
+   (let ((pkg-name) (relpath)(pkg-dir) (link-string)
+	 (splitpath (split-string path "==")))
+     (setq pkg-name (car splitpath))
+     (setq relpath (nth 1 splitpath))
+     (setq pkg-dir (file-name-directory
+		    (or (locate-library pkg-name)
+			(locate-library (format "%s-autoloads" pkg-name)))))
+(setq link-string (format "[[file:%s/%s]]" pkg-dir relpath))
+     (message "link: %s" link-string)
+     (org-open-link-from-string link-string))))
+#+END_SRC
+
+#+RESULTS:
+
+Now, we just have to make sure to use the right relative path. This link opens up an org-file in my installed version of org-mode: pkg3:org==../doc/library-of-babel.org
+
+I don't know if there is a more clever way to create these links. There are two parts to them: 1) the package, and 2) the relative path. The link syntax isn't that rich to do it without parsing the linkpath.
+
+#+END_EXAMPLE
+
+** Send email to a list of users
+I have a need to send a lot of emails to users in my class. I have to send each student an email containing there userid and a password assigned to them. I have a list of these, so the strategy is to create a function that will email that information to one user, and then use mapc to apply the function to each pair in a list.  First, we work out a function that will send one email to one user.
+
+#+BEGIN_SRC emacs-lisp
+(defun send-mail (userid password)
+  "send email to sunjaydixit@gmail.com containing their password"
+  (interactive)
+  (mail)
+  (mail-to)
+  (insert (format "%s@jaydixit.com" userid))
+  (mail-subject)
+  (insert "[06-640] account information")
+  (mail-text)
+  (insert (format "
+An account has been created on jaydixit.com
+userid: %s
+password: %s" userid password))
+  (mail-send-and-exit))
+
+;; (send-mail "jkitchin" "trustme99")
+#+END_SRC
+
+#+RESULTS:
+
+That worked well. I ran the block and got the email.
+
+Now, suppose I have this data:
+#+tblname: users
+| userid | password  |
+|--------+-----------|
+| user1  | trustme99 |
+| user2  | foolme99  |
+| user3  | blameme99 |
+
+We can pass that to a source block as a list of lists that will look like this:
+#+BEGIN_EXAMPLE
+ ((user1 trustme99) (user2 foolme99) (user3 blameme99))
+#+END_EXAMPLE
+
+Then, we can use a mapc to process each element. Here I use a dummy function with two arguments. If I substitute the function above, each of these users would get an email.
+
+#+BEGIN_SRC emacs-lisp :var data=users
+;; (defun fun (a b) (princ (format "user: %s\npassword: %s\n" a but)))
+
+;; (mapc (lambda (x) (fun (car x) (cadr x))) data)
+#+END_SRC
+
+#+RESULTS:
+: user: user1
+: password: trustme99
+: user: user2
+: password: foolme99
+: user: user3
+: password: blameme99
+
+I am not sure that is the best way to get the first and second elements in the list element. It looks funny to me, but it works fine. the alternative is not much prettier:
+
+#+BEGIN_SRC emacs-lisp :var data=users
+;; (defun fun (a b) (princ (format "user: %s\npassword: %s\n" a but)))
+
+;; (mapc (lambda (x) (fun (nth 0 x) (nth 1 x))) data)
+#+END_SRC
+
+#+RESULTS:
+: user: user1
+: password: trustme99
+: user: user2
+: password: foolme99
+: user: user3
+: password: blameme99
+
+Source: [[http://kitchingroup.cheme.cmu.edu/blog/2014/01/13/Send-email-to-a-list-of-users/][The Kitchin Research Group]]
+
+
+** videos
+- [[https://www.youtube.com/watch?v%3D6W82EdwQhxU][Hack Emacs - An Overview of Org Mode - YouTube]]
+- [[https://www.youtube.com/watch?v%3DoJTwQvgfgMM][Emacs Org-mode - a system for note-taking and project planning - YouTube]]
+- [[https://www.youtube.com/watch?v%3DnsGYet02bEk][Hack Emacs - Org Mode In Depth: Managing Structure - YouTube]]
+- [[https://www.youtube.com/watch?v%3DfgizHHd7nOo][Kitchin - org mode is awesome - YouTube]]
+
+** macro to create defuns?
+
+(defmacro make-my-function (name)
+  (list 'defun (intern (format "my-%s-function" name)) ()
+        (list 'interactive)
+        (list (intern (format "mark-%s" name)))
+        (list 'do-more-stuff)
+        (list (intern (format "modify-%s" name)))))
+
+** saveplace
+;; Save point position between sessions
+
+#+BEGIN_SRC NOTemacs-lisp
+  ;; Save point position between sessions
+  (use-package saveplace
+    :ensure t
+   :init (save-place-mode)) 
+#+END_SRC
+
+The saveplace package is part of Emacs, and remembers the position of point - even between emacs sessions.
+
+The last line sets the path to where saveplace stores your position data. Change it at your peril!
+
+** embolden next word
+
+   #+BEGIN_SRC emacs-lisp
+(define-minor-mode embolden-next-word
+    "Make the next word you type bold."
+  nil
+  :lighter " EMBOLDEN"
+  :keymap (let ((map (make-sparse-keymap)))
+            (define-key map (kbd "SPC") (lambda ()
+                      (interactive)
+                      (expand-abbrev)
+                      (save-excursion
+                        (goto-char (get-register 'p))
+                        (insert "*"))
+                      (insert "* ")
+                      (embolden-next-word -1)))
+        (define-key map (kbd ".") (lambda ()
+                    (interactive)
+                    (expand-abbrev)
+                    (save-excursion
+                      (goto-char (get-register 'p))
+                      (insert "*"))
+                    (insert "*. ")
+                    (embolden-next-word -1)))
+            map)
+  (if embolden-next-word
+      (set-register 'p (point))
+    (set-register 'p nil)))
+
+(global-set-key "\C-o" 'embolden-or-bold)
+;;(define-key key-minor-mode-map (kbd "C-o") 'embolden-or-bold)
+   #+END_SRC
+
+** no-abbrev-slash
+Doesn't work.
+
+      #+BEGIN_SRC emacs-lisp
+(define-minor-mode insert-slash-no-abbrev
+    "Make the next word you type bold."
+  nil
+  :lighter " don't abbreviate"
+  :keymap (let ((map (make-sparse-keymap)))
+            (define-key map (kbd "SPC") (lambda ()
+                      (interactive)
+(insert "/ ")
+))
+            map)
+  (if insert-slash-no-abbrev
+      (set-register 'p (point))
+    (set-register 'p nil)))
+;; (global-set-key "/" 'insert-slash-no-abbrev)
+
+      #+END_SRC
+
+** ideas
+C-d on an empty line in the shell terminates the process.
+
+(defun comint-delchar-or-eof-or-kill-buffer (arg)
+  (interactive "p")
+  (if (null (get-buffer-process (current-buffer)))
+      (kill-buffer)
+    (comint-delchar-or-maybe-eof arg)))
+
+(add-hook 'shell-mode-hook
+          (lambda ()
+            (define-key shell-mode-map
+              (kbd "C-d") 'comint-delchar-or-eof-or-kill-buffer)))
+With this snippet, another press of C-d will kill the buffer.
+
+It's pretty nice, since you then just tap C-d twice to get rid of the shell and go on about your merry way.
+
+
+
+Do you program any elisp, at all, ever?
+
+;; Elisp go-to-definition with M-. and back again with M-,
+(autoload 'elisp-slime-nav-mode "elisp-slime-nav")
+(add-hook 'emacs-lisp-mode-hook (lambda () (elisp-slime-nav-mode t)))
+(eval-after-load 'elisp-slime-nav '(diminish 'elisp-slime-nav-mode))
+Then you need to M-x package-install elisp-slime-nav-mode.
+
+It lets you jump to the definition of a function with M-., and back again afterwards with M-,.
+
+That last line says that we want elisp-slime-nav-mode to continue doing its work for us, but we no longer want to be reminded of it.
+
+
+** source code blocks: org-insert-src-block
+[[http://wenshanren.org/?p%3D334][Emacs：insert source code block in org-mode | 肉山博客 (Wenshan's Blog)]]
+
+
+#+BEGIN_SRC emacs-lisp
+(defun org-insert-src-block (src-code-type)
+  "Insert a `SRC-CODE-TYPE' type source code block in org-mode."
+  (interactive
+   (let ((src-code-types
+          '("emacs-lisp" "sh" "css" "dot" "latex" "fountain")))
+     (list (ido-completing-read "Source code type: " src-code-types))))
+  (progn
+    (newline-and-indent)
+    (insert (format "#+BEGIN_SRC %s\n" src-code-type))
+    (newline-and-indent)
+    (insert "#+END_SRC\n")
+    (previous-line 2)
+    (org-edit-src-code)))
+
+(local-set-key (kbd "C-c v e")
+               'org-edit-src-code)
+;; keybinding for inserting code blocks
+#+END_SRC
+
 
 
 * Temporary Snippets
@@ -589,26 +1331,27 @@ the emacs-ac-emoji package.]]
 * Org-mode Tweaks
 
   #+BEGIN_SRC emacs-lisp
-    (use-package org-bullets
-      :ensure t
-      :config 
-      (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+        (use-package org-bullets
+          :ensure t
+          :config 
+          (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
 
-   ;; http://stackoverflow.com/questions/15773354/indent-code-in-org-babel-src-blocks
-   (setq org-src-tab-acts-natively t)
+       ;; http://stackoverflow.com/questions/15773354/indent-code-in-org-babel-src-blocks
+       (setq org-src-tab-acts-natively t)
 
-   ;; syntax highlite color?
-   (setq org-src-fontify-natively t)
+       ;; syntax highlite color?
+       (setq org-src-fontify-natively t)
 
-;; http://stackoverflow.com/questions/12737317/collapsing-the-current-outline-in-emacs-org-mode
-;; cycle anywhere?
-;; don't really like it.. need another key
-;;(setq org-cycle-emulate-tab 'white)
+        (setq org-ellipsis " ▼")
+    ;; http://stackoverflow.com/questions/12737317/collapsing-the-current-outline-in-emacs-org-mode
+    ;; cycle anywhere?
+    ;; don't really like it.. need another key
+    ;;(setq org-cycle-emulate-tab 'white)
 
   #+END_SRC
   
   
-* Ido  etup
+* Ido Setup
   Ido  ll the things!!!
 
   #+BE IN_SRC NOT-emacs-lisp
